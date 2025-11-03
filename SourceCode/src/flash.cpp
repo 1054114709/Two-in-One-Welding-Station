@@ -19,6 +19,16 @@ void WriteFlash() {
     EEPROM.end();
 }
 
+void WriteDisplayType()
+{
+    EEPROM.begin(256);
+
+    EEPROM.write(52, Display_Type ? 1 : 0);            // true: IPS屏幕；false: TFT屏幕
+    EEPROM.write(53, Display_Type_Configured ? 1 : 0); // true: 已配置；false: 未配置
+
+    EEPROM.end();
+}
+
 void WriteSoldering()
 {
     EEPROM.begin(256);
@@ -121,6 +131,19 @@ void ReadFlash() {
         CoolingFan_Enabled = true; // Default value
     } else {
         CoolingFan_Enabled = (CoolingFan_Enabled == 1);
+    }
+
+    EEPROM.get(52, Display_Type);
+    if(Display_Type > 1) {
+        Display_Type = true; // Default value: IPS屏幕
+    } else {
+        Display_Type = (Display_Type == 1);
+    }
+    EEPROM.get(53, Display_Type_Configured);
+    if(Display_Type_Configured > 1) {
+        Display_Type_Configured = false; // Default value: 未配置
+    } else {
+        Display_Type_Configured = (Display_Type_Configured == 1);
     }
 
     EEPROM.end();

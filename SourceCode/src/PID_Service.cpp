@@ -7,13 +7,15 @@ QuickPID Soldering_PID(&soldering_temp_float, &Soldering_DutyCycle, &soldering_t
                         QuickPID::iAwMode::iAwClamp, 
                         QuickPID::Action::direct);
 
-// 添加外部DigitRoller对象声明
+/* // 添加外部DigitRoller对象声明
 extern DigitRoller* soldering_temp_display;
-extern DigitRoller* heatgun_temp_display;
+extern DigitRoller* heatgun_temp_display; */
 
 // 添加全局变量用于温度读取时序管理
 static unsigned long last_temp_read_time = 0;
 static unsigned long heatgun_last_temp_read_time = 0;
+static bool soldering_fault_shutdown_pending = false;
+static bool heatgun_fault_shutdown_pending = false; // 添加热风枪故障关闭等待状态
 
 void Soldering_PID_Compute_Init()
 {
@@ -57,9 +59,10 @@ void Soldering_PID_Compute()
         if (standby_state.ui_color_changed) {
             // 恢复为白色 - 设置数字流转和文本标签颜色
             lv_obj_set_style_text_color(ui_TextSolderingTemp, lv_color_white(), LV_PART_MAIN);
-            if (soldering_temp_display) {
+            lv_obj_set_style_text_color(ui_SolderingTemp, lv_color_white(), LV_PART_MAIN);
+            /* if (soldering_temp_display) {
                 soldering_temp_display->setStyle(&ui_font_ASCII88, lv_color_white());
-            }
+            } */
             standby_state.ui_color_changed = false;
         }
         
@@ -68,7 +71,7 @@ void Soldering_PID_Compute()
             Buzzer_OFF();
             buzzer_state.short_active = buzzer_state.long_active = false;
         }
-        
+        soldering_fault_shutdown_pending = false; // 重置故障关闭状态
         return;
     }
     
@@ -107,11 +110,13 @@ void Soldering_PID_Compute()
                 pid_state = PID_SLEEP;
                 standby_state.in_standby_mode = false; // 明确不是在"等待超时"的待机状态
                 standby_state.sleep_read_time = current_time;
+
                 // 设置UI为黑色 - 文本标签和数字流转
                 lv_obj_set_style_text_color(ui_TextSolderingTemp, lv_color_black(), LV_PART_MAIN);
-                if (soldering_temp_display) {
+                lv_obj_set_style_text_color(ui_SolderingTemp, lv_color_black(), LV_PART_MAIN);
+                /* if (soldering_temp_display) {
                     soldering_temp_display->setStyle(&ui_font_ASCII88, lv_color_black());
-                }
+                } */
                 // 触发进入休眠的蜂鸣器短鸣
                 if (Buzzer_Enabled && !buzzer_state.short_active && !buzzer_state.long_active) {
                     Buzzer_ON();
@@ -123,9 +128,10 @@ void Soldering_PID_Compute()
                 pid_state = PID_POWER_OFF;  // 重新开始循环以应用待机温度
                 // 设置UI为蓝色 - 文本标签和数字流转
                 lv_obj_set_style_text_color(ui_TextSolderingTemp, lv_color_hex(0x0080FF), LV_PART_MAIN);
-                if (soldering_temp_display) {
+                lv_obj_set_style_text_color(ui_SolderingTemp, lv_color_hex(0x0080FF), LV_PART_MAIN);
+                /* if (soldering_temp_display) {
                     soldering_temp_display->setStyle(&ui_font_ASCII88, lv_color_hex(0x0080FF));
-                }
+                } */
                 // 触发进入待机的蜂鸣器短鸣
                 if (Buzzer_Enabled && !buzzer_state.short_active && !buzzer_state.long_active) {
                     Buzzer_ON();
@@ -141,9 +147,10 @@ void Soldering_PID_Compute()
             // 恢复UI颜色为白色 - 文本标签和数字流转
             if (standby_state.ui_color_changed) {
                 lv_obj_set_style_text_color(ui_TextSolderingTemp, lv_color_white(), LV_PART_MAIN);
-                if (soldering_temp_display) {
+                lv_obj_set_style_text_color(ui_SolderingTemp, lv_color_white(), LV_PART_MAIN);
+                /* if (soldering_temp_display) {
                     soldering_temp_display->setStyle(&ui_font_ASCII88, lv_color_white());
-                }
+                } */
                 standby_state.ui_color_changed = false;
             }
             // 重置温度到达提示
@@ -167,11 +174,13 @@ void Soldering_PID_Compute()
             pid_state = PID_SLEEP;
             standby_state.in_standby_mode = false; // 已进入休眠，不再是待机
             standby_state.sleep_read_time = current_time; // 初始化休眠读取时间
+
             // 设置UI为黑色 - 文本标签和数字流转
             lv_obj_set_style_text_color(ui_TextSolderingTemp, lv_color_black(), LV_PART_MAIN);
-            if (soldering_temp_display) {
+            lv_obj_set_style_text_color(ui_SolderingTemp, lv_color_black(), LV_PART_MAIN);
+            /* if (soldering_temp_display) {
                 soldering_temp_display->setStyle(&ui_font_ASCII88, lv_color_black());
-            }
+            } */
             standby_state.ui_color_changed = true; // 确保颜色已设置为休眠状态的颜色
             // 触发进入休眠的蜂鸣器短鸣
             if (Buzzer_Enabled && !buzzer_state.short_active && !buzzer_state.long_active) {
@@ -192,11 +201,9 @@ void Soldering_PID_Compute()
     // 蜂鸣器管理 - 优化分支预测
     if (buzzer_state.short_active || buzzer_state.long_active) {
         if (!Buzzer_Enabled) {
-            // 蜂鸣器被禁用，立即停止
             Buzzer_OFF();
             buzzer_state.short_active = buzzer_state.long_active = false;
         } else {
-            // 检查蜂鸣器超时（短鸣叫优先级更高，时间更短）
             const unsigned long elapsed = current_time - buzzer_state.start_time;
             if (buzzer_state.short_active && elapsed >= 50) {
                 Buzzer_OFF();
@@ -206,6 +213,18 @@ void Soldering_PID_Compute()
                 buzzer_state.long_active = false;
             }
         }
+    }
+
+    if (soldering_fault_shutdown_pending) {
+        const bool buzzer_active = buzzer_state.short_active || buzzer_state.long_active;
+        if (!Buzzer_Enabled || !buzzer_active) {
+            Soldering_Set_PWM(0);
+            Soldering_DutyCycle = 0.0f;
+            Soldering_Enabled = false;
+            lv_obj_clear_state(ui_SolderingSwitch, LV_STATE_CHECKED);
+            soldering_fault_shutdown_pending = false;
+        }
+        return;
     }
     
     // 主状态机 - 待机模式复用正常循环
@@ -244,19 +263,19 @@ void Soldering_PID_Compute()
             }
             
             if (sensor_status != 0) {
-                // 传感器异常 - 立即处理
-                Soldering_DutyCycle = 0.0f;
-                Soldering_Set_PWM(0);
-                
-                // 触发应急蜂鸣器
-                if (Buzzer_Enabled && !buzzer_state.long_active && !buzzer_state.short_active) {
-                    Buzzer_ON();
-                    buzzer_state.start_time = current_time;
-                    buzzer_state.long_active = true;
-                }
+                if (!soldering_fault_shutdown_pending) {
+                    Soldering_DutyCycle = 0.0f;
+                    Soldering_Set_PWM(0);
+                    pid_state = PID_POWER_OFF;
 
-                pid_state = PID_POWER_OFF;
-                break;
+                    if (Buzzer_Enabled && !buzzer_state.long_active && !buzzer_state.short_active) {
+                        Buzzer_ON();
+                        buzzer_state.start_time = current_time;
+                        buzzer_state.long_active = true;
+                    }
+                    soldering_fault_shutdown_pending = true;
+                }
+                return;
             }
             
             // 传感器正常，更新温度
@@ -265,18 +284,19 @@ void Soldering_PID_Compute()
             // 安全检查 - 使用常量避免重复计算
             const int safety_threshold = SolderingTargetTempMax + 15;
             if (current_temp > safety_threshold) {
-                Soldering_DutyCycle = 0.0f;
-                Soldering_Set_PWM(0);
-                
-                // 触发应急蜂鸣器
-                if (Buzzer_Enabled && !buzzer_state.long_active && !buzzer_state.short_active) {
-                    Buzzer_ON();
-                    buzzer_state.start_time = current_time;
-                    buzzer_state.long_active = true;
-                }
+                if (!soldering_fault_shutdown_pending) {
+                    Soldering_DutyCycle = 0.0f;
+                    Soldering_Set_PWM(0);
+                    pid_state = PID_POWER_OFF;
 
-                pid_state = PID_POWER_OFF;
-                break;
+                    if (Buzzer_Enabled && !buzzer_state.long_active && !buzzer_state.short_active) {
+                        Buzzer_ON();
+                        buzzer_state.start_time = current_time;
+                        buzzer_state.long_active = true;
+                    }
+                    soldering_fault_shutdown_pending = true;
+                }
+                return;
             }
             
             // 根据当前模式选择目标温度
@@ -314,13 +334,17 @@ void Soldering_PID_Compute()
             break;
         }
         
-        case PID_HEATING:
-            // 内联时间检查
-            if (current_time - state_start_time >= 100) //加热状态持续100ms
-            {
+        case PID_HEATING: {
+            // 基于实时温度与目标温度的80%联动加热时长
+            const uint16_t target_temp_for_cmp = standby_state.in_standby_mode ? SolderingStandbyTemp : SolderingTargetTemp;
+            const uint16_t threshold_80 = (uint16_t)((target_temp_for_cmp * 8U) / 10U);
+            const unsigned long heat_duration = (Soldering_Temp < (int)threshold_80) ? 200UL : 100UL;
+
+            if (current_time - state_start_time >= heat_duration) {
                 pid_state = PID_POWER_OFF;
             }
             break;
+        }
             
         case PID_SLEEP:
             // 休眠状态 - 关闭输出，每200ms读取一次温度用于显示
@@ -402,9 +426,10 @@ void Heatgun_PID_Compute()
         if (heatgun_sleep_state.ui_color_changed) {
             // 恢复为白色 - 文本标签和数字流转
             lv_obj_set_style_text_color(ui_TextHeatgunTemp, lv_color_white(), LV_PART_MAIN);
-            if (heatgun_temp_display) {
+            lv_obj_set_style_text_color(ui_HeatgunTemp, lv_color_white(), LV_PART_MAIN);
+            /* if (heatgun_temp_display) {
                 heatgun_temp_display->setStyle(&ui_font_ASCII88, lv_color_white());
-            }
+            } */
             heatgun_sleep_state.ui_color_changed = false;
         }
         heatgun_sleep_state.in_sleep_mode_active = false; 
@@ -416,6 +441,7 @@ void Heatgun_PID_Compute()
         }
         heatgun_buzzer_state.temperature_reached_played = false; 
         heatgun_internal_state.was_disabled = true; 
+        heatgun_fault_shutdown_pending = false; // 重置故障关闭状态
         return;
     }
 
@@ -479,6 +505,20 @@ void Heatgun_PID_Compute()
             }
         }
     }
+
+    // 处理热风枪故障关闭等待状态
+    if (heatgun_fault_shutdown_pending) {
+        const bool buzzer_active = heatgun_buzzer_state.short_active || heatgun_buzzer_state.long_active;
+        if (!Buzzer_Enabled || !buzzer_active) {
+            Heatgun_Set_PWM(0);
+            Heatgun_Set_FAN_PWM(0);
+            Heatgun_DutyCycle = 0.0f;
+            Heatgun_Enabled = false;
+            lv_obj_clear_state(ui_HeatgunSwitch, LV_STATE_CHECKED);
+            heatgun_fault_shutdown_pending = false;
+        }
+        return;
+    }
     
     // --- 休眠状态转换 (基于消抖后信号的边沿检测) ---
     if (debounced_sleep_is_low != heatgun_sleep_state.last_processed_debounced_signal_is_low) {
@@ -491,9 +531,10 @@ void Heatgun_PID_Compute()
 
             // 设置为蓝色 - 文本标签和数字流转
             lv_obj_set_style_text_color(ui_TextHeatgunTemp, lv_color_hex(0x0080FF), LV_PART_MAIN); 
-            if (heatgun_temp_display) {
+            lv_obj_set_style_text_color(ui_HeatgunTemp, lv_color_hex(0x0080FF), LV_PART_MAIN);
+            /* if (heatgun_temp_display) {
                 heatgun_temp_display->setStyle(&ui_font_ASCII88, lv_color_hex(0x0080FF));
-            }
+            } */
             heatgun_sleep_state.ui_color_changed = true;
 
             // 进入休眠冷却蜂鸣器短鸣
@@ -509,9 +550,10 @@ void Heatgun_PID_Compute()
             if (heatgun_sleep_state.ui_color_changed) { 
                 // 恢复为白色 - 文本标签和数字流转
                 lv_obj_set_style_text_color(ui_TextHeatgunTemp, lv_color_white(), LV_PART_MAIN);
-                if (heatgun_temp_display) {
+                lv_obj_set_style_text_color(ui_HeatgunTemp, lv_color_white(), LV_PART_MAIN);
+                /* if (heatgun_temp_display) {
                     heatgun_temp_display->setStyle(&ui_font_ASCII88, lv_color_white());
-                }
+                } */
                 heatgun_sleep_state.ui_color_changed = false;
             }
             // 确保所有蜂鸣器停止并重置温度到达标志
@@ -542,9 +584,10 @@ void Heatgun_PID_Compute()
                 if (heatgun_sleep_state.ui_color_changed) { 
                      // 恢复为白色 - 文本标签和数字流转
                      lv_obj_set_style_text_color(ui_TextHeatgunTemp, lv_color_white(), LV_PART_MAIN);
-                     if (heatgun_temp_display) {
+                     lv_obj_set_style_text_color(ui_HeatgunTemp, lv_color_white(), LV_PART_MAIN);
+                     /* if (heatgun_temp_display) {
                          heatgun_temp_display->setStyle(&ui_font_ASCII88, lv_color_white());
-                     }
+                     } */
                      heatgun_sleep_state.ui_color_changed = false;
                 }
             }
@@ -558,31 +601,37 @@ void Heatgun_PID_Compute()
             }
 
             if (Heatgun_Status != 0) { 
-                Heatgun_Set_PWM(0);
-                Heatgun_DutyCycle = 0.0f;
-                Heatgun_Set_FAN_PWM(0); 
-                
-                if (Buzzer_Enabled && !heatgun_buzzer_state.long_active && !heatgun_buzzer_state.short_active) {
-                    Buzzer_ON();
-                    heatgun_buzzer_state.start_time = current_time;
-                    heatgun_buzzer_state.long_active = true;
+                if (!heatgun_fault_shutdown_pending) {
+                    Heatgun_Set_PWM(0);
+                    Heatgun_DutyCycle = 0.0f;
+                    Heatgun_Set_FAN_PWM(0);
+                    heatgun_pid_state = HEATGUN_PID_OFF;
+
+                    if (Buzzer_Enabled && !heatgun_buzzer_state.long_active && !heatgun_buzzer_state.short_active) {
+                        Buzzer_ON();
+                        heatgun_buzzer_state.start_time = current_time;
+                        heatgun_buzzer_state.long_active = true;
+                    }
+                    heatgun_fault_shutdown_pending = true;
                 }
-                heatgun_pid_state = HEATGUN_PID_OFF;
-                break;
+                return;
             }
 
             if (Heatgun_Temp > (HeatgunTargetTempMax + HEATGUN_SAFETY_MAX_TEMP_OFFSET)) { 
-                Heatgun_Set_PWM(0);
-                Heatgun_DutyCycle = 0.0f;
-                Heatgun_Set_FAN_PWM(100.0f); 
+                if (!heatgun_fault_shutdown_pending) {
+                    Heatgun_Set_PWM(0);
+                    Heatgun_DutyCycle = 0.0f;
+                    Heatgun_Set_FAN_PWM(0);
+                    heatgun_pid_state = HEATGUN_PID_OFF;
 
-                if (Buzzer_Enabled && !heatgun_buzzer_state.long_active && !heatgun_buzzer_state.short_active) {
-                    Buzzer_ON();
-                    heatgun_buzzer_state.start_time = current_time;
-                    heatgun_buzzer_state.long_active = true;
+                    if (Buzzer_Enabled && !heatgun_buzzer_state.long_active && !heatgun_buzzer_state.short_active) {
+                        Buzzer_ON();
+                        heatgun_buzzer_state.start_time = current_time;
+                        heatgun_buzzer_state.long_active = true;
+                    }
+                    heatgun_fault_shutdown_pending = true;
                 }
-                heatgun_pid_state = HEATGUN_PID_OFF; 
-                break;
+                return;
             }
 
             if (!heatgun_sleep_state.in_sleep_mode_active &&
@@ -623,9 +672,10 @@ void Heatgun_PID_Compute()
             } else { // Temp <= 100C
                 // 转换到 SLEEP_IDLE 状态，改变UI颜色为黑色
                 lv_obj_set_style_text_color(ui_TextHeatgunTemp, lv_color_black(), LV_PART_MAIN); 
-                if (heatgun_temp_display) {
+                lv_obj_set_style_text_color(ui_HeatgunTemp, lv_color_black(), LV_PART_MAIN);
+                /* if (heatgun_temp_display) {
                     heatgun_temp_display->setStyle(&ui_font_ASCII88, lv_color_black());
-                }
+                } */
                 // 根据 SLEEP_IDLE 的逻辑立即设置风扇
                 if (Heatgun_Temp > HEATGUN_SLEEP_COOL_DOWN_TEMP_STAGE3) { // (60C, 100C]
                     Heatgun_Set_FAN_PWM(30.0f);

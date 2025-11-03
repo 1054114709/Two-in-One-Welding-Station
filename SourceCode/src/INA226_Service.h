@@ -5,6 +5,7 @@
 #include <lvgl.h>
 #include <ui/ui.h>
 #include <INA226.h>
+#include <variables.h>
 
 #define INA226_SCL 19
 #define INA226_SDA 18

@@ -1,5 +1,8 @@
 #include <GPIO_Service.h>
 
+//系统时钟频率250MHz，PWM频率 = 250MHz / (分频器 * 计数值)
+
+
 void Soldering_GPIO_Init()
 {
     analogReadResolution(12);
@@ -31,12 +34,17 @@ bool Soldering_Read_SLEEP()
 void Soldering_Set_PWM(float value)
 {
     // 设置焊台PWM占空比
+    uint16_t uint_value;
     uint slice_num = pwm_gpio_to_slice_num(Soldering_PWM);
     uint channel = pwm_gpio_to_channel(Soldering_PWM);
     if (value > SolderingMaxPower) {
         value = SolderingMaxPower; // 限制最大值
     }
-    pwm_set_chan_level(slice_num, channel, value * 100); // 设置占空比
+    else
+    {
+        uint_value = (uint16_t)(value * 100);
+    }
+    pwm_set_chan_level(slice_num, channel, uint_value); // 设置占空比
 }
 
 //——————————————————————————————————————————————————————————————————————//

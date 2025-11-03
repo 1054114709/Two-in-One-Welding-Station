@@ -14,7 +14,7 @@ bool INA226_Init()
     return false; // 初始化失败，返回 false
   }
   INA.setMaxCurrentShunt(10, 0.005);
-  INA.setAverage(INA226_128_SAMPLES);
+  INA.setAverage(INA226_256_SAMPLES);
   INA.setShuntVoltageConversionTime(INA226_1100_us);
   INA.setBusVoltageConversionTime(INA226_1100_us);
   INA226_Timer = lv_timer_create(INA226_Task, 100, NULL);
@@ -24,6 +24,7 @@ bool INA226_Init()
 
 void INA226_Task(lv_timer_t *timer)
 {
+
     // 电压：2位整数，2位小数
     int voltage_full = round(INA.getBusVoltage() * 100);
     int voltage_int = voltage_full / 100;

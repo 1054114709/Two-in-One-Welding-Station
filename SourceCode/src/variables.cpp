@@ -1,8 +1,11 @@
 #include <variables.h> 
 
-String Version = "Ver: 1.3 - 250712 Release"; // 固件版本号
+String Version = "Ver: 1.4 - 251104 Release"; // 固件版本号
 
 bool temp_read_mutex = false; // 互斥锁，防止同时读取温度
+
+bool Display_Type = true;             // true: IPS屏幕；false: TFT屏幕
+bool Display_Type_Configured = false; // 是否已配置显示类型
 
 bool Soldering_Enabled = false;
 

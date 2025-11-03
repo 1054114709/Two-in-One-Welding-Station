@@ -149,6 +149,18 @@ void lvgl_task_handler()
   handle_encoder_parameters_edit();
 }
 
+void ChangeDisplayType(bool Type)
+{
+  if (Type)
+  {
+    tft.invertDisplay(true); // true:IPS屏幕
+  }
+  else
+  {
+    tft.invertDisplay(false); // false:TFT屏幕
+  }
+}
+
 static void pid_setting_focus_cb(lv_event_t *e)
 {
     lv_event_code_t code = lv_event_get_code(e);

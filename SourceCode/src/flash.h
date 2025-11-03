@@ -6,11 +6,14 @@
 #include <EEPROM.h>
 
 void WriteFlash();
+void WriteDisplayType();
 void WriteSoldering();
 void WriteHeatgun();
 void WritePID();
+
 void ReadFlash();
 void ReadPID();
+
 void ClearFlash();
 
 #endif

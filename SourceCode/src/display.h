@@ -28,5 +28,6 @@ void lvgl_task_handler();
 void MainScreen_init();
 void SystemSettingScreen_init();
 void PIDSettingScreen_init();
+void ChangeDisplayType(bool Type);
 
 #endif

@@ -5,16 +5,16 @@ MAX6675 sensor2(MAX6675_SO_PIN, MAX6675_CS2_PIN, MAX6675_CLK_PIN, &SPI1, 1000000
 lv_timer_t* MAX6675_Display_Timer;
 
 
-// 添加DigitRoller对象
+/* // 添加DigitRoller对象
 DigitRoller* soldering_temp_display = nullptr;
-DigitRoller* heatgun_temp_display = nullptr;
+DigitRoller* heatgun_temp_display = nullptr; */
 
 void MAX6675_Init()
 {
     sensor1.begin();
     sensor2.begin();
     
-    // 创建数字流转显示对象
+/*     // 创建数字流转显示对象
     // 需要传入原来ui_SolderingTemp和ui_HeatgunTemp标签的父容器
     lv_obj_t* soldering_parent = lv_obj_get_parent(ui_SolderingTemp);
     lv_obj_t* heatgun_parent = lv_obj_get_parent(ui_HeatgunTemp);
@@ -38,7 +38,7 @@ void MAX6675_Init()
     
     // 设置初始值
     soldering_temp_display->setValue(0);
-    heatgun_temp_display->setValue(0);
+    heatgun_temp_display->setValue(0); */
     
     MAX6675_Display_Timer = lv_timer_create(MAX6675_Display_Task, 200, NULL);
 }
@@ -47,33 +47,55 @@ void MAX6675_Read_Task()
 {
     if(Soldering_Enabled == false)
     {
-        // 添加静态变量用于控制200ms间隔读取温度
         static unsigned long last_temp_read_time = 0;
+        static unsigned long soldering_disabled_time = 0;
+        static bool just_disabled = false;
+        static int last_valid_temp = 0;
+        
         unsigned long current_time = millis();
         
-        if (current_time - last_temp_read_time >= 200) {
-            // 互斥锁保护温度读取
+        // 检测刚刚关闭的情况
+        if (!just_disabled) {
+            just_disabled = true;
+            soldering_disabled_time = current_time;
+            last_valid_temp = Soldering_Temp;
+        }
+        
+        // 关闭后等待300ms，然后每200ms读取一次
+        if ((current_time - soldering_disabled_time >= 300) && 
+            (current_time - last_temp_read_time >= 200)) {
+            
             if (!temp_read_mutex) {
                 temp_read_mutex = true;
                 Soldering_Status = MAX6675_Read_Soldering_Status();
+                
                 if (Soldering_Status == 0) {
-                    Soldering_Temp = (int)MAX6675_Read_Soldering_Temperature();
+                    int new_temp = (int)MAX6675_Read_Soldering_Temperature();
+                    
+                    // 异常值过滤：温度变化不应超过50°C
+                    if (abs(new_temp - last_valid_temp) <= 50) {
+                        Soldering_Temp = new_temp;
+                        last_valid_temp = new_temp;
+                    }
+                    // 异常值时保持上次有效温度，不更新
                 }
                 temp_read_mutex = false;
                 last_temp_read_time = current_time;
             }
-            // 如果互斥锁被占用，跳过本次读取，保持上次的温度值
         }
+    }
+    else
+    {
+        static bool just_disabled = false;
+        just_disabled = false;
     }
 
     if(Heatgun_Enabled == false)
     {
-        // 添加静态变量用于控制200ms间隔读取温度
         static unsigned long last_heatgun_temp_read_time = 0;
         unsigned long current_time = millis();
         
         if (current_time - last_heatgun_temp_read_time >= 200) {
-            // 互斥锁保护温度读取
             if (!temp_read_mutex) {
                 temp_read_mutex = true;
                 Heatgun_Status = MAX6675_Read_Heatgun_Status();
@@ -83,7 +105,6 @@ void MAX6675_Read_Task()
                 temp_read_mutex = false;
                 last_heatgun_temp_read_time = current_time;
             }
-            // 如果互斥锁被占用，跳过本次读取，保持上次的温度值
         }
     }
 }
@@ -93,14 +114,15 @@ void MAX6675_Display_Task(lv_timer_t *timer)
     if (Soldering_Status == 0)
     {
         // 正常显示温度
-        soldering_temp_display->setValue(Soldering_Temp);
-        MAX6675_Soldering_Numberflow(); // 确保烙铁温度显示更新
+        // soldering_temp_display->setValue(Soldering_Temp);
+        // MAX6675_Soldering_Numberflow(); // 确保烙铁温度显示更新
+        lv_label_set_text_fmt(ui_SolderingTemp, "%03d", Soldering_Temp);
         lv_bar_set_value(ui_BarSolderingDuty, (int)Soldering_DutyCycle, LV_ANIM_ON);
     }
     else
     {
         // 错误时显示ERR文本
-        MAX6675_Soldering_Normal(); // 确保烙铁温度显示更新
+        // MAX6675_Soldering_Normal(); // 确保烙铁温度显示更新
         lv_label_set_text(ui_SolderingTemp, "ERR");
         lv_bar_set_value(ui_BarSolderingDuty, 0, LV_ANIM_ON);
     }
@@ -108,20 +130,21 @@ void MAX6675_Display_Task(lv_timer_t *timer)
     if (Heatgun_Status == 0)
     {
         // 正常显示温度
-        heatgun_temp_display->setValue(Heatgun_Temp);
-        MAX6675_Heatgun_Numberflow(); // 确保热风枪温度显示更新
+        // heatgun_temp_display->setValue(Heatgun_Temp);
+        // MAX6675_Heatgun_Numberflow(); // 确保热风枪温度显示更新
+        lv_label_set_text_fmt(ui_HeatgunTemp, "%03d", Heatgun_Temp);
         lv_bar_set_value(ui_BarHeatgunDuty, (int)Heatgun_DutyCycle, LV_ANIM_ON);
     }
     else
     {
         // 错误时显示ERR文本
-        MAX6675_Heatgun_Normal(); // 确保热风枪温度显示更新
+        // MAX6675_Heatgun_Normal(); // 确保热风枪温度显示更新
         lv_label_set_text(ui_HeatgunTemp, "ERR");
         lv_bar_set_value(ui_BarHeatgunDuty, 0, LV_ANIM_ON);
     }
 }
 
-void MAX6675_Soldering_Numberflow()
+/* void MAX6675_Soldering_Numberflow()
 {
     lv_obj_add_flag(ui_SolderingTemp, LV_OBJ_FLAG_HIDDEN); // 隐藏错误标签
     lv_obj_clear_flag(soldering_temp_display->getContainer(), LV_OBJ_FLAG_HIDDEN); // 显示数字流转
@@ -143,7 +166,7 @@ void MAX6675_Heatgun_Normal()
 {
     lv_obj_clear_flag(ui_HeatgunTemp, LV_OBJ_FLAG_HIDDEN); // 显示错误标签
     lv_obj_add_flag(heatgun_temp_display->getContainer(), LV_OBJ_FLAG_HIDDEN); // 隐藏数字流转
-}
+} */
 
 uint8_t MAX6675_Read_Soldering_Status()
 {

@@ -5,6 +5,9 @@
 
 extern String Version;
 
+extern bool Display_Type;
+extern bool Display_Type_Configured;
+
 extern bool temp_read_mutex; // 互斥锁，防止同时读取温度
 
 extern bool Soldering_Enabled;
