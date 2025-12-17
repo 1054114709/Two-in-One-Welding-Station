@@ -41,12 +41,12 @@ float Heatgun_DutyCycle;
 
 //———— Soldering PID For Universual JBC245 ——————//
 
-float Soldering_KP = 20.0f;
-float Soldering_KI = 0.5f;
-float Soldering_KD = 0.1f;
+float Soldering_KP = 18.0f;
+float Soldering_KI = 12.0f;
+float Soldering_KD = 2.0f;
 
 //———— Heatgun PID For Universual 858D ——————//
 
-float Heatgun_KP = 60.0f;
-float Heatgun_KI = 3.0f;
-float Heatgun_KD = 100.0f;
+float Heatgun_KP = 58.0f;
+float Heatgun_KI = 14.0f;
+float Heatgun_KD = 20.0f;

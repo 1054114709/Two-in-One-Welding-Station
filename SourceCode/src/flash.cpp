@@ -157,28 +157,28 @@ void ReadPID() {
 
     EEPROM.get(26, SolderingKp);
     if(SolderingKp == 0) {
-        SolderingKp = 20000; // Default value
+        SolderingKp = 18000; // Default value
     }
     EEPROM.get(30, SolderingKi);
     if(SolderingKi == 0) {
-        SolderingKi = 5000; // Default value
+        SolderingKi = 12000; // Default value
     }
     EEPROM.get(34, SolderingKd);
     if(SolderingKd == 0) {
-        SolderingKd = 100; // Default value
+        SolderingKd = 2000; // Default value
     }
 
     EEPROM.get(38, HeatgunKp);
     if(HeatgunKp == 0) {
-        HeatgunKp = 60000; // Default value
+        HeatgunKp = 58000; // Default value
     }
     EEPROM.get(42, HeatgunKi);
     if(HeatgunKi == 0) {
-        HeatgunKi = 3000; // Default value
+        HeatgunKi = 14000; // Default value
     }
     EEPROM.get(46, HeatgunKd);
     if(HeatgunKd == 0) {
-        HeatgunKd = 1000; // Default value
+        HeatgunKd = 20000; // Default value
     }
 
     Soldering_KP = (float)SolderingKp / 1000.0f;
